@@ -8,7 +8,7 @@ Future = Npm.require(path.join("fibers", "future"))
 _dummyCollection_ = new Meteor.Collection '__dummy__'
 
 # Wrapper of the call to the db into a Future
-_futureWrapper = (collection, commandName, args)->
+_futureWrapper = (collection, commandName, args, query, options)->
   col = if (typeof collection) == "string" then  _dummyCollection_ else collection
   collectionName = if (typeof collection) == "string" then  collection else collection._name
 
@@ -18,7 +18,11 @@ _futureWrapper = (collection, commandName, args)->
 
   future = new Future
   cb = future.resolver()
-  coll1[commandName](args, cb)
+  switch commandName
+    when "distinct"
+      coll1[commandName](args, query, options, cb)
+    when "aggregate"
+      coll1[commandName](args, cb)
   result = future.wait()
 
 
@@ -36,10 +40,10 @@ _callMapReduce = (collection, map, reduce, options)->
   future = new Future
   #cb = future.resolver()
   coll1.mapReduce map, reduce, options, (err,result,stats)->
-      #tl?.debug "Inside MapReduce callback now!"
-      future.throw(err) if err
-      res = {collectionName: result.collectionName, stats: stats}
-      future.return [true,res]
+    #tl?.debug "Inside MapReduce callback now!"
+    future.throw(err) if err
+    res = {collectionName: result.collectionName, stats: stats}
+    future.return [true,res]
 
   result = future.wait() #
   #console.log "Result from the callMapReduce is: "
@@ -52,9 +56,9 @@ _callMapReduce = (collection, map, reduce, options)->
 # Extending Collection on the server
 _.extend Meteor.Collection::,
 
-  distinct: (key) ->
+  distinct: (key, query, options) ->
     #_collectionDistinct @_name, key, query, options
-    _futureWrapper @_name, "distinct", key
+    _futureWrapper @_name, "distinct", key, query, options
 
   aggregate: (pipeline) ->
     _futureWrapper @_name, "aggregate", pipeline
